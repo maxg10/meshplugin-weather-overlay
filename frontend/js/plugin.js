@@ -123,6 +123,12 @@ var WeatherOverlayPlugin = (function () {
         if (!self._showHeat) return;
         if (!window.L || !L.heatLayer) return;
 
+        // Absolute temperature scale for meaningful colours
+        // Only applies to temperature metric; other metrics use relative scale
+        var useAbsolute = (self._metric === 'temperature');
+        var TEMP_MIN = 0;   // °C → blue
+        var TEMP_MAX = 40;  // °C → red
+
         var points = [];
         var vals = [];
         nodes.forEach(function (n) {
@@ -134,12 +140,22 @@ var WeatherOverlayPlugin = (function () {
         });
         if (!points.length) return;
 
-        var min = Math.min.apply(null, vals);
-        var max = Math.max.apply(null, vals);
-        var range = max - min || 1;
-        var normalized = points.map(function (p) {
-            return [p[0], p[1], (p[2] - min) / range];
-        });
+        var normalized;
+        if (useAbsolute) {
+            normalized = points.map(function (p) {
+                var norm = (p[2] - TEMP_MIN) / (TEMP_MAX - TEMP_MIN);
+                return [p[0], p[1], Math.max(0, Math.min(1, norm))];
+            });
+        } else {
+            // Relative scale for other metrics
+            var min = Math.min.apply(null, vals);
+            var max = Math.max.apply(null, vals);
+            var range = max - min || 1;
+            normalized = points.map(function (p) {
+                return [p[0], p[1], (p[2] - min) / range];
+            });
+        }
+
         self._heat = L.heatLayer(normalized, {
             radius: 35, blur: 25, maxZoom: 12,
             gradient: HEAT_GRADIENT, minOpacity: 0.35
@@ -205,6 +221,7 @@ var WeatherOverlayPlugin = (function () {
             script.src = 'https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js';
             script.onload = function() {
                 console.log('[WeatherOverlay] Leaflet.heat loaded');
+                self._render();
             };
             document.head.appendChild(script);
         }
